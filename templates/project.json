@@ -1,0 +1,9 @@
+{
+  "title": "Название ролика",
+  "scenes": [
+    {"image": "images/01.png", "text": "Текст диктора первой сцены — крючок.", "motion": "in"},
+    {"image": "images/02.png", "text": "Текст второй сцены.", "motion": "left"},
+    {"image": "images/03.mp4", "text": "Сцена с видеоклипом вместо картинки.", "motion": "none"},
+    {"image": "images/04.png", "text": "Финальная фраза, которая закольцовывает ролик.", "motion": "out", "duration": 5}
+  ]
+}
