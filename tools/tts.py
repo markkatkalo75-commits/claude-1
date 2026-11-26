@@ -55,12 +55,26 @@ def ts(seconds: float) -> str:
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
-def words_to_srt(words: list[tuple[float, float, str]], per_line: int) -> str:
+def punctuation_breaks(words, text: str) -> list[bool]:
+    """Сервис отдаёт слова без знаков препинания — находим их в исходном тексте."""
+    low, cursor, breaks = text.replace("\u0301", "").lower(), 0, []
+    for _s, _e, w in words:
+        i = low.find(w.lower(), cursor)
+        if i < 0:
+            breaks.append(False)
+            continue
+        cursor = i + len(w)
+        breaks.append(bool(re.match(r"\s*[.!?…,:;—–]|\s*\n", text.replace("\u0301", "")[cursor:])))
+    return breaks
+
+
+def words_to_srt(words: list[tuple[float, float, str]], per_line: int, text: str = "") -> str:
     """Группирует слова по per_line, рвёт группу на знаках препинания."""
     out, group = [], []
-    for w in words:
+    breaks = punctuation_breaks(words, text) if text else [False] * len(words)
+    for w, brk in zip(words, breaks):
         group.append(w)
-        if len(group) >= per_line or re.search(r"[.!?…,:;—]$", w[2]):
+        if len(group) >= per_line or brk:
             out.append(group)
             group = []
     if group:
@@ -95,12 +109,19 @@ def main():
     ap.add_argument("--rate", default="-5%", help="скорость, напр. -10%%, +0%%")
     ap.add_argument("--pitch", default="-6Hz", help="высота, ниже = эпичнее")
     ap.add_argument("--words", type=int, default=3, help="слов в одном субтитре")
+    ap.add_argument("--subs-only", action="store_true",
+                    help="только пересобрать subs.srt из words.json, без новой озвучки")
     a = ap.parse_args()
 
     script = a.project / "script.txt"
     if not script.exists():
         sys.exit(f"Нет файла {script}")
     raw = script.read_text(encoding="utf-8").strip()
+    if a.subs_only:
+        words = json.loads((a.project / "words.json").read_text(encoding="utf-8"))
+        (a.project / "subs.srt").write_text(words_to_srt(words, a.words, raw), encoding="utf-8")
+        print(f"OK: {a.project / 'subs.srt'}")
+        return
     text = apply_pronunciations(raw, load_pronunciations(a.project))
 
     mp3 = a.project / "voice.mp3"
@@ -115,7 +136,7 @@ def main():
             time.sleep(2 * attempt)
     # В субтитрах показываем слова без знаков ударения
     words = [(s, e, w.replace("́", "")) for s, e, w in words]
-    (a.project / "subs.srt").write_text(words_to_srt(words, a.words), encoding="utf-8")
+    (a.project / "subs.srt").write_text(words_to_srt(words, a.words, raw), encoding="utf-8")
     # точное время слов — по нему build_video.py меняет сцены синхронно с речью
     (a.project / "words.json").write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
     dur = words[-1][1] if words else 0
