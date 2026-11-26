@@ -61,7 +61,7 @@ class Background:
         base = top[None, None, :] * (1 - y[..., None]) + bottom[None, None, :] * y[..., None]
         glow = np.exp(-((x * 1.1) ** 2 + ((y - 0.4) * 2.2) ** 2))[..., None]
         self.big = np.clip(base + glow * np.array([95, 60, 25]), 0, 255).astype(np.int16)
-        self.grain = [rng.normal(0, 9, (H, W, 1)).astype(np.int16) for _ in range(6)]
+        self.grain = [rng.normal(0, 5, (H, W, 1)).astype(np.int16) for _ in range(6)]
 
     def frame(self, t, k):
         off = int(200 + 180 * math.sin(t * 0.35))

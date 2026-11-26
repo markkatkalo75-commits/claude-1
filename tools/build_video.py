@@ -242,7 +242,7 @@ def main():
         audio = ["-map", "0:v"]
 
     final = project / "out" / "final.mp4"
-    run(["ffmpeg", "-y", *inputs, *audio, *vf, "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+    run(["ffmpeg", "-y", *inputs, *audio, *vf, "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-maxrate", "8M", "-bufsize", "16M",
          "-pix_fmt", "yuv420p", "-t", f"{sum(durs):.3f}", "-movflags", "+faststart", str(final)], cwd=tmp)
     print(f"Готово: {final}")
 
