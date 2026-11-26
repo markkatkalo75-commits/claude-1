@@ -5,13 +5,14 @@
     python tools/tts.py projects/<slug>
 
 Читает  projects/<slug>/script.txt  (только текст для диктора)
-Пишет   projects/<slug>/voice.mp3 и projects/<slug>/subs.srt
+Пишет   projects/<slug>/voice.mp3, subs.srt и words.json (время слов)
 
 Ударения и произношение: файл pronunciations.txt в корне репозитория
 и/или в папке проекта, строки вида  «Один = Óдин»  или  «Локи = Ло́ки».
 """
 import argparse
 import asyncio
+import json
 import re
 import sys
 import time
@@ -115,6 +116,8 @@ def main():
     # В субтитрах показываем слова без знаков ударения
     words = [(s, e, w.replace("́", "")) for s, e, w in words]
     (a.project / "subs.srt").write_text(words_to_srt(words, a.words), encoding="utf-8")
+    # точное время слов — по нему build_video.py меняет сцены синхронно с речью
+    (a.project / "words.json").write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
     dur = words[-1][1] if words else 0
     print(f"OK: {mp3} ({dur:.1f} с), субтитры: {a.project / 'subs.srt'}")
     if dur > 59:

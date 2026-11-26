@@ -74,6 +74,29 @@ def plan_durations(scenes, total: float):
             durs[i] = 1.5
 
 
+def norm(text: str) -> str:
+    return re.sub(r"[^\w]|_", "", text.replace("\u0301", "").lower())
+
+
+def aligned_durations(scenes, words, total):
+    """Границы сцен по времени слов из озвучки (words.json). None — если текст не совпал."""
+    stream, spans = "", []
+    for start, _end, w in words:
+        n = norm(w)
+        spans.append((len(stream), len(stream) + len(n), start))
+        stream += n
+    scene_text = [norm(s.get("text", "")) for s in scenes]
+    if not stream or "".join(scene_text) != stream:
+        return None
+    bounds, pos = [0.0], 0
+    for t in scene_text[:-1]:
+        pos += len(t)
+        bounds.append(next((st for a, b, st in spans if a >= pos), total))
+    bounds.append(total)
+    durs = [b - a for a, b in zip(bounds, bounds[1:])]
+    return durs if all(d > 0.3 for d in durs) else None
+
+
 def motion_filter(motion: str, frames: int) -> str:
     n = max(frames - 1, 1)
     center = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
@@ -165,7 +188,12 @@ def main():
     music = a.music.resolve() if a.music else project / "music.mp3"
 
     total = duration_of(voice) + 0.8 if voice.exists() else sum(s.get("duration", 5) for s in scenes)
-    durs = plan_durations(scenes, total)
+    durs = None
+    if (project / "words.json").exists() and not any(s.get("duration") for s in scenes):
+        durs = aligned_durations(scenes, json.loads((project / "words.json").read_text(encoding="utf-8")), total)
+        print("Смена сцен синхронизирована с речью" if durs else
+              "Текст сцен не совпал с озвучкой — длительности по длине текста")
+    durs = durs or plan_durations(scenes, total)
     print(f"Сцен: {len(scenes)}, длительность: {sum(durs):.1f} с")
 
     tmp = project / "out" / "tmp"
@@ -187,7 +215,7 @@ def main():
             srt = tmp / "subs_auto.srt"
             srt.write_text(auto_srt(scenes, durs), encoding="utf-8")
         shutil.copy(srt, tmp / "subs.srt")
-        style = ("FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,"
+        style = ("FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,"
                  "OutlineColour=&H00000000,BorderStyle=1,Outline=1.6,Shadow=0,Alignment=2,MarginV=80")
         vf = ["-vf", f"subtitles=subs.srt:force_style='{style}'"]
 

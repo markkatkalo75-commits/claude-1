@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 W, H, FPS = 1080, 1920, 30
 GOLD = (232, 195, 90)
 TEXT_Y = 0.36  # центр текста по высоте (субтитры ниже, интерфейс соцсетей — по краям)
-BARS_Y = 1130  # линия эквалайзера
+BARS_Y = 1000  # линия эквалайзера
 
 
 def ease_out_back(x):
@@ -152,9 +152,9 @@ def render(card, anim, dur, out, font_path, env=None, t0=0.0, seed=0, bg=None):
         x0 = cx - (bars * (bw + gap) - gap) / 2
         for i in range(bars):
             shape = 0.35 + 0.65 * abs(math.sin(gt * 7 + phases[i])) * (1 - abs(i - bars // 2) / (bars * 0.75))
-            h = 10 + 150 * level * shape
+            h = 8 + 115 * level * shape
             x = x0 + i * (bw + gap)
-            d.rounded_rectangle((x, BARS_Y - h, x + bw, BARS_Y + h * 0.45), radius=6,
+            d.rounded_rectangle((x, BARS_Y - h, x + bw, BARS_Y + h * 0.35), radius=6,
                                 fill=GOLD + (int(110 + 120 * min(level, 1)),))
 
         # анимация текста
