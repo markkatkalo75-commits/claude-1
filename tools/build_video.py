@@ -19,6 +19,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:  # моушн-графика для сцен без картинок (нужны Pillow и numpy)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import animate
+except ImportError:
+    animate = None
+
 W, H, FPS = 1080, 1920, 30
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".mkv"}
 MOTIONS = ["in", "out", "left", "right"]
@@ -42,6 +48,10 @@ def find_font() -> str | None:
         r = subprocess.run(["fc-match", "-f", "%{file}", "DejaVu Sans:bold"], capture_output=True, text=True)
         if r.returncode == 0 and Path(r.stdout).exists():
             return r.stdout
+    for f in ("C:/Windows/Fonts/arialbd.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+              "/Library/Fonts/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
+        if Path(f).exists():
+            return f
     return None
 
 
@@ -81,7 +91,7 @@ def motion_filter(motion: str, frames: int) -> str:
     return f"{cover},zoompan=z='{z}':{xy}:d={frames}:s={W}x{H}:fps={FPS},setsar=1,format=yuv420p"
 
 
-def render_scene(i, scene, dur, project: Path, tmp: Path, font):
+def render_scene(i, scene, dur, project: Path, tmp: Path, font, t0=0.0, env=None, bg=None):
     out = tmp / f"scene_{i:02}.mp4"
     frames = round(dur * FPS)
     src = project / scene.get("image", "")
@@ -93,15 +103,26 @@ def render_scene(i, scene, dur, project: Path, tmp: Path, font):
         motion = scene.get("motion") or MOTIONS[i % len(MOTIONS)]
         run(["ffmpeg", "-y", "-loop", "1", "-i", src, "-frames:v", str(frames),
              "-vf", motion_filter(motion, frames), *enc, out])
+    elif animate is not None:
+        animate.render(scene.get("card") or f"СЦЕНА {i + 1}", scene.get("anim"), dur, out, font,
+                       env=env, t0=t0, seed=i, bg=bg)
+        print(f"  сцена {i + 1}: анимация «{scene.get('anim') or 'авто'}»")
     else:
-        label = f"СЦЕНА {i + 1}"
-        vf = "format=yuv420p"
+        # Типографический кадр: текст из "card" (или «СЦЕНА N») на тёмном фоне с зерном
+        card = scene.get("card") or f"СЦЕНА {i + 1}"
+        lines = card.split("\n")
+        size = int(max(70, min(240, 900 / (0.68 * max(len(l) for l in lines)))))
+        vf = "noise=alls=14:allf=t+u,vignette=PI/4"
         if font:
-            vf = (f"drawtext=fontfile='{font}':text='{label}':fontcolor=0xC9A227:fontsize=110:"
-                  f"x=(w-tw)/2:y=(h-th)/2,format=yuv420p")
-        run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=0x15110c:s={W}x{H}:r={FPS}",
+            txt = tmp / f"card_{i:02}.txt"
+            txt.write_text(card, encoding="utf-8")
+            vf += (f",drawtext=fontfile='{font}':textfile='{txt}':fontcolor=0xE8C35A:fontsize={size}:"
+                   f"line_spacing={size // 5}:text_align=C:x=(w-tw)/2:y=h*0.36-th/2:"
+                   f"shadowcolor=black@0.7:shadowx=4:shadowy=4")
+        vf += ",format=yuv420p"
+        run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=0x1a140e:s={W}x{H}:r={FPS}",
              "-frames:v", str(frames), "-vf", vf, *enc, out])
-        print(f"  сцена {i + 1}: нет файла «{scene.get('image', '')}» — заглушка")
+        print(f"  сцена {i + 1}: нет файла «{scene.get('image', '')}» — типографический кадр")
     return out
 
 
@@ -150,7 +171,11 @@ def main():
     tmp = project / "out" / "tmp"
     tmp.mkdir(parents=True, exist_ok=True)
     font = find_font()
-    clips = [render_scene(i, s, d, project, tmp, font) for i, (s, d) in enumerate(zip(scenes, durs))]
+    env = animate.voice_envelope(voice) if animate and voice.exists() else None
+    bg = animate.Background() if animate else None
+    starts = [sum(durs[:k]) for k in range(len(durs))]
+    clips = [render_scene(i, s, d, project, tmp, font, starts[i], env, bg)
+             for i, (s, d) in enumerate(zip(scenes, durs))]
     (tmp / "list.txt").write_text("".join(f"file '{c.name}'\n" for c in clips), encoding="utf-8")
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "video.mp4"], cwd=tmp)
 
